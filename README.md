@@ -1,6 +1,6 @@
 # Lavanderia Digital APMBB V2
 
-Estrutura inicial do portal da Lavanderia Digital da Academia de Polícia Militar do Barro Branco. Inclui cadastro, login, verificação de e-mail e telas iniciais de máquinas e administração. As telas das máquinas exibem BRASTEMP (lavadora), LG (lava e seca) e ELETROLUX (secadora). As filas, as operações de manutenção e os avisos operacionais dependem do backend.
+Estrutura inicial do portal da Lavanderia Digital da Academia de Polícia Militar do Barro Branco. Inclui cadastro, login, verificação de e-mail e telas iniciais de máquinas e administração. As telas das máquinas exibem BRASTEMP (lavadora), LG (lava e seca) e ELETROLUX (secadora). O backend inicial de filas e manutenção está em `functions/`. O frontend ainda exibe as telas iniciais, sem chamadas operacionais.
 
 ## Desenvolvimento local
 
@@ -21,7 +21,7 @@ Abra o endereço informado pelo Vite, com o caminho `/lavanderia-apmbb-v2/`. A t
 3. Para validar a tela administrativa, a conta de teste deve ter e-mail verificado e a custom claim `admin: true` configurada por um administrador via SDK Admin. Renove a sessão após atribuir a claim.
 4. `firestore.rules` nega todo acesso dos clientes. `firebase.json` referencia esse arquivo e `.firebaserc` identifica o projeto. Revise as regras antes de qualquer aplicação manual, pois elas bloqueiam as leituras e escritas de clientes do projeto.
 
-A configuração Web do Firebase é incorporada ao bundle. Mantenha credenciais privadas e dados pessoais fora de variáveis `VITE_*` e do repositório. Consulte [a preparação do backend](functions/README.md) para os requisitos de filas, manutenção e notificações.
+A configuração Web do Firebase é incorporada ao bundle. Mantenha credenciais privadas e dados pessoais fora de variáveis `VITE_*` e do repositório. Consulte [a documentação do backend](functions/README.md) para APIs, emuladores, testes, implantação futura e custos.
 
 ## Verificações
 
