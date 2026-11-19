@@ -44,3 +44,6 @@ button:disabled { opacity: .62; cursor: default; }
 @media (max-width: 720px) {
   .entry { grid-template-columns: 1fr; }
 }
+.queue-controls { margin-top: .8rem; }
+[role="timer"] { font-variant-numeric: tabular-nums; }
+.admin-release { margin-top: .75rem; }

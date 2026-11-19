@@ -1,9 +1,139 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Os clientes acessam suas informações pelas funções callable autorizadas.
-    match /{document=**} {
-      allow read, write: if false;
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function account() {
+      return get(/databases/$(database)/documents/usuariosAutorizados/$(request.auth.uid)).data;
+    }
+    function authorized() {
+      return signedIn() && account().enabled == true && account().role in ['student', 'admin'];
+    }
+    function validMachine(id) {
+      return id in ['brastemp', 'lg', 'eletrolux'];
+    }
+    function machine(id) {
+      return /databases/$(database)/documents/filasSpark/$(id);
+    }
+    function ticket(id, number) {
+      return /databases/$(database)/documents/filasSpark/$(id)/tickets/$(string(number));
+    }
+    function ownPointer(id) {
+      return /databases/$(database)/documents/filasSpark/$(id)/ativas/$(request.auth.uid);
+    }
+    function hasTicket(id, number) {
+      return exists(ownPointer(id)) && get(ownPointer(id)).data.number == number;
+    }
+    function liveCall(data) {
+      return request.time < data.calledAt + duration.value(10, 'm');
+    }
+    function queueChangedOnly(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+    function advances(before, after) {
+      return after.head == before.head + 1 && after.phase == 'idle' && after.calledAt == null
+        && after.tail == before.tail && after.maintenance == before.maintenance;
+    }
+    function validClosure(before, state) {
+      return before.phase == 'running'
+        ? state in ['finished', 'released']
+        : state == (liveCall(before) ? 'cancelled' : 'expired');
+    }
+    function advanceMachine(id, before, after) {
+      return before.head <= before.tail && advances(before, after)
+        && queueChangedOnly(['head', 'phase', 'calledAt'])
+        && (
+          (before.phase == 'idle' && get(ticket(id, before.head)).data.state == 'cancelled')
+          || (before.phase in ['called', 'running']
+            && get(ticket(id, before.head)).data.state == 'waiting'
+            && validClosure(before, getAfter(ticket(id, before.head)).data.state))
+        );
+    }
+    // Os três documentos da inscrição precisam mudar no mesmo commit.
+    function enqueue(id, before, after) {
+      return before.maintenance == false && before.tail - before.head < 24
+        && after.tail == before.tail + 1 && after.tail <= 9007199254740991
+        && queueChangedOnly(['tail'])
+        && getAfter(ownPointer(id)).data.number == after.tail
+        && getAfter(ticket(id, after.tail)).data.state == 'waiting';
+    }
+    function callHead(id, before, after) {
+      return before.phase == 'idle' && before.maintenance == false && before.head <= before.tail
+        && after.phase == 'called' && after.calledAt == request.time
+        && queueChangedOnly(['phase', 'calledAt'])
+        && getAfter(ticket(id, before.head)).data.state == 'waiting';
+    }
+    function startHead(id, before, after) {
+      return before.phase == 'called' && before.maintenance == false && liveCall(before)
+        && hasTicket(id, before.head) && after.phase == 'running'
+        && queueChangedOnly(['phase']);
+    }
+    function closeTicket(id, before, after, number) {
+      let next = request.resource.data.state;
+      return resource.data.state == 'waiting' && queueChangedOnly(['state', 'closedAt'])
+        && request.resource.data.closedAt == request.time
+        && (
+          (next == 'cancelled' && hasTicket(id, number)
+            && (number > before.head || (number == before.head && before.phase == 'idle')))
+          || (number == before.head && advances(before, after) && (
+            (before.phase == 'called' && next == 'expired' && !liveCall(before))
+            || (before.phase == 'running' && next == 'released' && account().role == 'admin')
+            || (hasTicket(id, number) && (
+              (before.phase == 'called' && next == 'cancelled' && liveCall(before))
+              || (before.phase == 'running' && next == 'finished')
+            ))
+          ))
+        );
+    }
+    function newPointer(id, number) {
+      return request.resource.data.keys().hasOnly(['number']) && number is int
+        && number == get(machine(id)).data.tail + 1
+        && getAfter(machine(id)).data.tail == number
+        && getAfter(ticket(id, number)).data.state == 'waiting';
+    }
+
+    match /usuariosAutorizados/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /filasSpark/{id} {
+      allow get: if validMachine(id) && authorized();
+      allow update: if validMachine(id) && authorized() && (
+        (queueChangedOnly(['maintenance']) && request.resource.data.maintenance is bool
+          && account().role == 'admin')
+        || enqueue(id, resource.data, request.resource.data)
+        || callHead(id, resource.data, request.resource.data)
+        || startHead(id, resource.data, request.resource.data)
+        || advanceMachine(id, resource.data, request.resource.data)
+      );
+
+      match /tickets/{key} {
+        allow get: if validMachine(id) && authorized();
+        allow list: if validMachine(id) && authorized() && request.query.limit <= 25;
+        allow create: if validMachine(id) && authorized()
+          && request.resource.data.keys().hasOnly(['number', 'state'])
+          && request.resource.data.number is int && key == string(request.resource.data.number)
+          && request.resource.data.state == 'waiting'
+          && newTicket(id, request.resource.data.number);
+        allow update: if validMachine(id) && authorized()
+          && closeTicket(id, get(machine(id)).data, getAfter(machine(id)).data, resource.data.number);
+      }
+
+      match /ativas/{uid} {
+        allow get: if validMachine(id) && authorized() && request.auth.uid == uid;
+        allow create: if validMachine(id) && authorized() && request.auth.uid == uid
+          && newPointer(id, request.resource.data.number);
+        allow update: if validMachine(id) && authorized() && request.auth.uid == uid
+          && newPointer(id, request.resource.data.number)
+          && get(ticket(id, resource.data.number)).data.state in ['cancelled', 'finished', 'expired', 'released'];
+      }
+    }
+
+    function newTicket(id, number) {
+      return number == get(machine(id)).data.tail + 1
+        && getAfter(machine(id)).data.tail == number
+        && getAfter(ownPointer(id)).data.number == number;
     }
   }
 }
