@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore/lite'
+import { connectAuthEmulator, getAuth } from 'firebase/auth'
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore'
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -11,17 +11,26 @@ const config = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
+export const emulated = __LOCAL_DEV_SERVER__ && import.meta.env.DEV
+  && import.meta.env.VITE_FIREBASE_USE_EMULATORS === 'true'
+export const queuesEnabled = emulated || import.meta.env.VITE_FIREBASE_SPARK_ENABLED === 'true'
+
 export const firebase = (() => {
-  if (Object.values(config).some((value) => typeof value !== 'string' || !value.trim())) {
+  if (!emulated && Object.values(config).some((value) => typeof value !== 'string' || !value.trim())) {
     return null
   }
-
   try {
-    const app = initializeApp(config)
+    const app = initializeApp(__LOCAL_DEV_SERVER__ && emulated
+      ? { projectId: 'demo-lavanderia', apiKey: 'demo-lavanderia' }
+      : config)
     const auth = getAuth(app)
+    const db = getFirestore(app)
+    if (emulated) {
+      connectAuthEmulator(auth, 'http://127.0.0.1:9099')
+      connectFirestoreEmulator(db, '127.0.0.1', 8080)
+    }
     auth.languageCode = 'pt-BR'
-
-    return { auth, db: getFirestore(app) }
+    return { auth, db }
   } catch {
     return null
   }

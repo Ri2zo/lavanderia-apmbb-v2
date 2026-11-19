@@ -28,7 +28,7 @@ export function Login({ auth, onVerificationError }: { auth: Auth | null; onVeri
       <section className="intro">
         <p className="eyebrow">Academia de Polícia Militar do Barro Branco</p>
         <h1>Lavanderia Digital APMBB</h1>
-        <p>Portal dos alunos para acompanhar as máquinas e, quando o serviço estiver disponível, participar das filas da lavanderia.</p>
+        <p>Portal dos alunos para acompanhar as máquinas e participar das filas da lavanderia.</p>
       </section>
       <section className="card" aria-labelledby="auth-title">
         <h2 id="auth-title">{register ? 'Criar conta' : 'Acessar sua conta'}</h2>
