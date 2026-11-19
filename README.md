@@ -52,8 +52,14 @@ Cada fila aceita até 25 posições pendentes, incluindo cancelamentos que ainda
 
 ## Revisão e publicação
 
-As filas ficam desativadas em builds sem `VITE_FIREBASE_SPARK_ENABLED=true`. O novo esquema usa uma coleção própria. Registros do protótipo anterior ficam fora das regras e da interface atuais. O workflow atual valida o build e permite a publicação manual do site no GitHub Pages. Ele não aplica regras nem ativa filas.
+O GitHub Pages publica manualmente a branch `main` pelo workflow **Build e publicação no GitHub Pages**. O build usa a configuração do app Web Firebase fornecida pelas seis variáveis listadas em `.env.example`. Esses valores são públicos no bundle. O site publicado usa o Firebase do projeto, com os emuladores restritos ao servidor de desenvolvimento local.
 
-Para uma futura ativação revisada, registre o app Web no projeto Firebase, configure o provedor E-mail/senha e preencha as seis variáveis `VITE_FIREBASE_*` do app Web listadas em `.env.example`. Essas variáveis são públicas no bundle. Cadastre os UIDs autorizados no console do Firestore e crie, para cada ID de máquina, um documento em `filasSpark` com `head: 1`, `tail: 0`, `phase: "idle"`, `calledAt: null` e `maintenance: false`. Revise as regras no emulador antes de aplicar `firestore.rules` ao projeto real. A publicação futura com filas exige uma alteração deliberada do workflow para fornecer a variável de ativação ao build. Use o plano Spark e mantenha o caminho `/lavanderia-apmbb-v2/` no GitHub Pages.
+### Habilitar ou desabilitar as filas
+
+1. No repositório do GitHub, abra **Settings → Secrets and variables → Actions → Variables**. Em **Repository variables**, crie ou edite `VITE_FIREBASE_SPARK_ENABLED`.
+2. Para habilitar, salve exatamente `true`, em minúsculas e sem espaços. Para desabilitar, salve `false` ou remova a variável. Um valor ausente, vazio ou diferente de `true` mantém as filas desativadas no build.
+3. Após salvar a configuração, abra **Actions → Build e publicação no GitHub Pages → Run workflow**, selecione `main` e clique em **Run workflow**. Aguarde a conclusão da publicação e confira o estado das filas no site. Repita a publicação manual sempre que alterar a variável, pois o valor é incorporado ao bundle durante o build.
+
+A ativação usa o plano Spark, as regras do Firestore já publicadas, os documentos `brastemp`, `lg` e `eletrolux` da coleção `filasSpark` e as contas já autorizadas. Registros do protótipo anterior ficam fora das regras e da interface atuais.
 
 Substitua o espaço reservado no cabeçalho pelo brasão original quando o arquivo autorizado estiver disponível.
