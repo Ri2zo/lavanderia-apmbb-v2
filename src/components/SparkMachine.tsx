@@ -1,19 +1,26 @@
 import { useEffect, useMemo, useState } from 'react'
 import { collection, limit, onSnapshot, query, where, type Firestore } from 'firebase/firestore'
 import {
-  advanceQueue, CALL_MS, changeQueue, queueMessage, queueRefs,
+  advanceQueue, CALL_MS, changeQueue, MAX_CYCLE_MINUTES, MIN_CYCLE_MINUTES, queueMessage, queueRefs,
   type Action, type MachineState, type Ticket,
 } from '../services/sparkQueue'
 import type { Machine } from '../types/laundry'
 
-function EstimatedTime({ calledAt }: { calledAt: number }) {
+function EstimatedTime({ deadline, cycle = false }: { deadline: number; cycle?: boolean }) {
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
   }, [])
-  const seconds = Math.min(600, Math.max(0, Math.ceil((calledAt + CALL_MS - now) / 1000)))
-  return <p>Tempo estimado <strong role="timer">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</strong></p>
+  const remaining = Math.max(0, Math.ceil((deadline - now) / 1000))
+  const seconds = cycle ? remaining : Math.min(remaining, CALL_MS / 1000)
+  return <>
+    {cycle && <p>Término previsto <time dateTime={new Date(deadline).toISOString()}>
+      {new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }).format(deadline)}
+    </time> (horário de Brasília)</p>}
+    {cycle && seconds === 0 ? <p role="status">Tempo previsto encerrado</p>
+      : <p>Tempo restante <strong role="timer">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</strong></p>}
+  </>
 }
 
 export function SparkMachine({ db, uid, admin, machine }: {
@@ -67,14 +74,14 @@ export function SparkMachine({ db, uid, admin, machine }: {
   const myPhase = isHead ? state?.phase : undefined
   const hasQueue = state && state.head <= state.tail
 
-  async function run(action: Action) {
+  async function run(action: Action, durationMinutes?: number) {
     setBusy(true)
     setActionError('')
     try {
       if (action === 'advance' || action === 'expire') {
         await advanceQueue(db, machine.id, uid, action === 'expire')
       } else {
-        await changeQueue(db, machine.id, uid, action, action === 'release' ? head : activeNumber)
+        await changeQueue(db, machine.id, uid, action, action === 'release' ? head : activeNumber, durationMinutes)
         if (action !== 'start') {
           try {
             await advanceQueue(db, machine.id, uid)
@@ -107,10 +114,14 @@ export function SparkMachine({ db, uid, admin, machine }: {
               <p>{myPhase === 'called' ? 'Você foi convocado' : myPhase === 'running' ? 'Seu ciclo está em andamento' : 'Você está na fila'}</p>
               <p>{isHead ? 'Posição 1' : position && position.head === head && position.number === activeNumber
                 ? `Posição ${position.count}` : 'Calculando posição…'}</p>
-              {myPhase === 'called' && state.calledAt && <EstimatedTime calledAt={state.calledAt.toMillis()} />}
+              {myPhase === 'called' && state.calledAt && <EstimatedTime deadline={state.calledAt.toMillis() + CALL_MS} />}
+              {myPhase === 'running' && state.expectedEndAt && <EstimatedTime deadline={state.expectedEndAt.toMillis()} cycle />}
               <div className="actions">
                 {myPhase !== 'running' && <button disabled={busy} onClick={() => void run('cancel')}>Cancelar inscrição</button>}
-                {myPhase === 'called' && !state.maintenance && <button className="primary" disabled={busy} onClick={() => void run('start')}>Iniciar ciclo</button>}
+                {myPhase === 'called' && !state.maintenance && <button className="primary" disabled={busy} onClick={() => {
+                  const input = window.prompt(`Duração prevista em minutos (${MIN_CYCLE_MINUTES} a ${MAX_CYCLE_MINUTES})`)
+                  if (input !== null) void run('start', /^\d+$/.test(input.trim()) ? Number(input) : NaN)
+                }}>Iniciar ciclo</button>}
                 {myPhase === 'running' && <button className="primary" disabled={busy} onClick={() => void run('finish')}>Terminar ciclo</button>}
               </div>
             </>

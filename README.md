@@ -46,6 +46,12 @@ Os testes usam o SDK Web, regras reais e identidades sintéticas do emulador. A 
 - Depois de uma operação, o site tenta convocar o primeiro ticket disponível. Um usuário autorizado também pode escolher **Atualizar fila** ou **Verificar expiração**. O servidor garante o prazo mesmo com todo mundo offline. O registro da expiração e a próxima convocação esperam uma interação online. Se for preciso liberar um ciclo que já começou e foi abandonado, um administrador pode fazê-lo dentro do site.
 - Os avisos de convocação, expiração e manutenção aparecem no painel. O Firebase Authentication ainda envia o e-mail de verificação de conta. O sistema de filas não envia notificações externas.
 
+## Duração dos ciclos
+
+Ao iniciar um ciclo, informe a duração prevista em minutos inteiros. A faixa inicial é de 5 a 180 minutos. Para alterá-la, atualize os limites em `src/services/sparkQueue.ts`, `firestore.rules` e nos testes e publique as regras e o site de forma coordenada. A atualização das regras exige o novo cliente para iniciar ciclos. Planeje a troca durante uma janela sem uso e recarregue os clientes abertos. Ciclos que já estavam em andamento sem previsão continuam podendo ser encerrados.
+
+A transação grava o início com o horário do servidor, além da duração e da previsão de término. As regras comparam a previsão proposta com o início mais a duração e aceitam uma diferença de até 30 segundos para acomodar a latência e a diferença de relógio. Se o início for recusado com a convocação válida, confira o horário automático do dispositivo e tente novamente. O contador usa a previsão gravada e o relógio do dispositivo. Quando aparece **Tempo previsto encerrado**, o aluno ainda deve clicar em **Terminar ciclo** para liberar a máquina.
+
 ## Cotas do Spark
 
 Cada fila aceita até 25 posições pendentes, incluindo cancelamentos que ainda estejam à frente de posições válidas. A interface usa listeners no lugar de consultas periódicas. Cada conta autorizada escuta os três documentos de máquina e seus próprios ponteiros. A consulta de posição é limitada a 25 tickets e existe apenas enquanto a conta tiver uma inscrição aguardando atrás da primeira posição. Firestore pode cobrar leituras da cota por resultados iniciais, mudanças, reconexões e documentos consultados nas regras. Revise o consumo no console e organize a retenção do histórico antes do uso regular. Cotas esgotadas podem deixar o serviço indisponível até a renovação.
