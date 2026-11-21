@@ -44,7 +44,7 @@ Os testes usam o SDK Web, regras reais e identidades sintéticas do emulador. A 
 - `filasSpark/{id}/tickets/{number}` guarda número, status e horário de encerramento. Os tickets consultáveis por alunos autorizados não contêm UIDs nem endereços de e-mail. O site escuta os tickets anteriores apenas quando precisa calcular a posição do próprio aluno.
 - O horário de convocação deve coincidir com `request.time`, e as regras só aceitam início antes de `calledAt + 10 minutos`. O contador no site usa o horário do dispositivo para estimar o tempo restante. A estimativa pode divergir com o relógio desajustado. As regras decidem se o início, o cancelamento de uma convocação e a expiração são permitidos.
 - Depois de uma operação, o site tenta convocar o primeiro ticket disponível. Um usuário autorizado também pode escolher **Atualizar fila** ou **Verificar expiração**. O servidor garante o prazo mesmo com todo mundo offline. O registro da expiração e a próxima convocação esperam uma interação online. Se for preciso liberar um ciclo que já começou e foi abandonado, um administrador pode fazê-lo dentro do site.
-- Os avisos de convocação, expiração e manutenção aparecem no painel. O Firebase Authentication ainda envia o e-mail de verificação de conta. O sistema de filas não envia notificações externas.
+- Os avisos de convocação, expiração e manutenção aparecem no painel. O Firebase Authentication ainda envia o e-mail de verificação de conta. Os avisos externos têm uma integração opcional e desativada por padrão. Consulte [Notificações por e-mail](notifications/README.md).
 
 ## Duração dos ciclos
 
