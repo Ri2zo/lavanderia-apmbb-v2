@@ -8,3 +8,8 @@ firebase-debug*.log
 functions/lib/
 firestore-debug.log
 ui-debug.log
+
+# Configuração local do Worker
+notifications/wrangler.toml
+notifications/.wrangler/
+notifications/.dev.vars*

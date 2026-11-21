@@ -1,0 +1,19 @@
+name = "lavanderia-notificacoes"
+main = "worker.mjs"
+compatibility_date = "2026-11-20"
+workers_dev = false
+preview_urls = false
+
+[vars]
+NOTIFICATIONS_ENABLED = "false"
+FIREBASE_PROJECT_ID = "lavanderia-digital-apmbb-v2"
+BREVO_SENDER_EMAIL = "remetente@example.invalid"
+
+[[d1_databases]]
+binding = "NOTIFICATIONS"
+database_name = "lavanderia-notificacoes"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+# Após revisão, configure em UTC:
+# [triggers]
+# crons = ["* * * * *"]

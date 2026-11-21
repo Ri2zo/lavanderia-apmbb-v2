@@ -33,7 +33,9 @@ service cloud.firestore {
     }
     function advances(before, after) {
       return after.head == before.head + 1 && after.phase == 'idle' && after.calledAt == null
-        && after.tail == before.tail && after.maintenance == before.maintenance;
+        && after.tail == before.tail && after.maintenance == before.maintenance
+        && after.get('startedAt', null) == null && after.get('expectedEndAt', null) == null
+        && after.get('durationMinutes', null) == null;
     }
     function validClosure(before, state) {
       return before.phase == 'running'
@@ -42,7 +44,7 @@ service cloud.firestore {
     }
     function advanceMachine(id, before, after) {
       return before.head <= before.tail && advances(before, after)
-        && queueChangedOnly(['head', 'phase', 'calledAt'])
+        && queueChangedOnly(['head', 'phase', 'calledAt', 'startedAt', 'expectedEndAt', 'durationMinutes'])
         && (
           (before.phase == 'idle' && get(ticket(id, before.head)).data.state == 'cancelled')
           || (before.phase in ['called', 'running']
@@ -67,7 +69,16 @@ service cloud.firestore {
     function startHead(id, before, after) {
       return before.phase == 'called' && before.maintenance == false && liveCall(before)
         && hasTicket(id, before.head) && after.phase == 'running'
-        && queueChangedOnly(['phase']);
+        && after.startedAt == request.time
+        && after.durationMinutes is int && after.durationMinutes >= 5 && after.durationMinutes <= 180
+        && after.expectedEndAt is timestamp
+        && validExpectedEnd(after)
+        && queueChangedOnly(['phase', 'startedAt', 'expectedEndAt', 'durationMinutes']);
+    }
+    function validExpectedEnd(data) {
+      let expected = request.time + duration.value(data.durationMinutes, 'm');
+      return data.expectedEndAt >= expected - duration.value(30, 's')
+        && data.expectedEndAt <= expected + duration.value(30, 's');
     }
     function closeTicket(id, before, after, number) {
       let next = request.resource.data.state;

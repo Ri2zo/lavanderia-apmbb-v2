@@ -44,7 +44,13 @@ Os testes usam o SDK Web, regras reais e identidades sintéticas do emulador. A 
 - `filasSpark/{id}/tickets/{number}` guarda número, status e horário de encerramento. Os tickets consultáveis por alunos autorizados não contêm UIDs nem endereços de e-mail. O site escuta os tickets anteriores apenas quando precisa calcular a posição do próprio aluno.
 - O horário de convocação deve coincidir com `request.time`, e as regras só aceitam início antes de `calledAt + 10 minutos`. O contador no site usa o horário do dispositivo para estimar o tempo restante. A estimativa pode divergir com o relógio desajustado. As regras decidem se o início, o cancelamento de uma convocação e a expiração são permitidos.
 - Depois de uma operação, o site tenta convocar o primeiro ticket disponível. Um usuário autorizado também pode escolher **Atualizar fila** ou **Verificar expiração**. O servidor garante o prazo mesmo com todo mundo offline. O registro da expiração e a próxima convocação esperam uma interação online. Se for preciso liberar um ciclo que já começou e foi abandonado, um administrador pode fazê-lo dentro do site.
-- Os avisos de convocação, expiração e manutenção aparecem no painel. O Firebase Authentication ainda envia o e-mail de verificação de conta. O sistema de filas não envia notificações externas.
+- Os avisos de convocação, expiração e manutenção aparecem no painel. O Firebase Authentication ainda envia o e-mail de verificação de conta. Os avisos externos têm uma integração opcional e desativada por padrão. Consulte [Notificações por e-mail](notifications/README.md).
+
+## Duração dos ciclos
+
+Ao iniciar um ciclo, informe a duração prevista em minutos inteiros. A faixa inicial é de 5 a 180 minutos. Para alterá-la, atualize os limites em `src/services/sparkQueue.ts`, `firestore.rules` e nos testes e publique as regras e o site de forma coordenada. A atualização das regras exige o novo cliente para iniciar ciclos. Planeje a troca durante uma janela sem uso e recarregue os clientes abertos. Ciclos que já estavam em andamento sem previsão continuam podendo ser encerrados.
+
+A transação grava o início com o horário do servidor, além da duração e da previsão de término. As regras comparam a previsão proposta com o início mais a duração e aceitam uma diferença de até 30 segundos para acomodar a latência e a diferença de relógio. Se o início for recusado com a convocação válida, confira o horário automático do dispositivo e tente novamente. O contador usa a previsão gravada e o relógio do dispositivo. Quando aparece **Tempo previsto encerrado**, o aluno ainda deve clicar em **Terminar ciclo** para liberar a máquina.
 
 ## Cotas do Spark
 

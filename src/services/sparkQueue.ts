@@ -1,6 +1,6 @@
 import { FirebaseError } from 'firebase/app'
 import {
-  doc, getDocFromServer, runTransaction, serverTimestamp, type Firestore, type Timestamp, type Transaction,
+  doc, getDocFromServer, runTransaction, serverTimestamp, Timestamp, type Firestore, type Transaction,
 } from 'firebase/firestore'
 import type { MachineId } from '../types/laundry'
 
@@ -12,10 +12,19 @@ export type MachineState = {
   phase: Phase
   calledAt: Timestamp | null
   maintenance: boolean
+  startedAt?: Timestamp | null
+  expectedEndAt?: Timestamp | null
+  durationMinutes?: number | null
 }
 export type Ticket = { number: number; state: TicketState }
 export type Action = 'join' | 'cancel' | 'start' | 'finish' | 'advance' | 'expire' | 'maintenance' | 'release'
 export const CALL_MS = 600_000
+export const MIN_CYCLE_MINUTES = 5
+export const MAX_CYCLE_MINUTES = 180
+
+export function validCycleMinutes(minutes: number): boolean {
+  return Number.isInteger(minutes) && minutes >= MIN_CYCLE_MINUTES && minutes <= MAX_CYCLE_MINUTES
+}
 
 export function queueRefs(db: Firestore, id: MachineId, uid: string) {
   const machine = doc(db, 'filasSpark', id)
@@ -26,14 +35,17 @@ export function queueRefs(db: Firestore, id: MachineId, uid: string) {
   }
 }
 
-export async function changeQueue(db: Firestore, id: MachineId, uid: string, action: Action, expected?: number) {
+export async function changeQueue(db: Firestore, id: MachineId, uid: string, action: Action, expected?: number, durationMinutes?: number) {
+  if (action === 'start' && !validCycleMinutes(durationMinutes ?? NaN)) {
+    throw new Error(`Informe uma duração inteira entre ${MIN_CYCLE_MINUTES} e ${MAX_CYCLE_MINUTES} minutos.`)
+  }
   const refs = queueRefs(db, id, uid)
   for (let attempt = 0; ; attempt++) {
     let observed: MachineState | undefined
     try {
       return await runTransaction(db, async (tx) => {
         observed = (await tx.get(refs.machine)).data() as MachineState | undefined
-        return applyAction(tx, refs, observed, action, expected)
+        return applyAction(tx, refs, observed, action, expected, durationMinutes)
       })
     } catch (error) {
       if (!(error instanceof FirebaseError) || error.code !== 'permission-denied' || !observed || attempt >= 4) {
@@ -53,13 +65,16 @@ function machineChanged(before: MachineState, after: MachineState) {
 }
 
 async function applyAction(tx: Transaction, refs: ReturnType<typeof queueRefs>,
-  machine: MachineState | undefined, action: Action, expected?: number) {
+  machine: MachineState | undefined, action: Action, expected?: number, durationMinutes?: number) {
   if (!machine) throw new Error('Máquina ainda não configurada.')
   const head = machine.head <= machine.tail ? machine.head : null
 
   function close(number: number, status: TicketState, moveHead: boolean) {
     tx.update(refs.ticket(number), { state: status, closedAt: serverTimestamp() })
-    if (moveHead) tx.update(refs.machine, { head: number + 1, phase: 'idle', calledAt: null })
+    if (moveHead) {
+      tx.update(refs.machine, { head: number + 1, phase: 'idle', calledAt: null,
+        startedAt: null, expectedEndAt: null, durationMinutes: null })
+    }
   }
 
   if (action === 'maintenance') {
@@ -113,7 +128,13 @@ async function applyAction(tx: Transaction, refs: ReturnType<typeof queueRefs>,
     if (pointer === head && machine.phase === 'running') throw new Error('Seu ciclo já está em andamento.')
     close(pointer, 'cancelled', pointer === head && machine.phase === 'called')
   } else if (action === 'start' && pointer === head && machine.phase === 'called' && !machine.maintenance) {
-    tx.update(refs.machine, { phase: 'running' })
+    if (durationMinutes === undefined) throw new Error('Informe a duração do ciclo.')
+    tx.update(refs.machine, {
+      phase: 'running',
+      startedAt: serverTimestamp(),
+      expectedEndAt: Timestamp.fromMillis(Date.now() + durationMinutes * 60_000),
+      durationMinutes,
+    })
   } else if (action === 'finish' && pointer === head && machine.phase === 'running') {
     close(pointer, 'finished', true)
   } else {

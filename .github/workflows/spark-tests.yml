@@ -24,3 +24,4 @@ jobs:
           java-version: '25'
       - run: npm ci
       - run: npx --yes firebase-tools@15.37.0 emulators:exec --project demo-lavanderia-tests --only firestore "npm test"
+      - run: node --test notifications/*.test.mjs
